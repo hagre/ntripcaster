@@ -95,10 +95,8 @@
 #endif
 #endif
 
-
 extern int errno, running;
 extern server_info_t info;
-
 
 int
 get_log_fd (int whichlog)
@@ -108,7 +106,6 @@ get_log_fd (int whichlog)
 	
 	return -1;
 }
-
 
 void 
 write_log (int whichlog, char *fmt, ...)
@@ -166,7 +163,6 @@ log_no_thread (int whichlog, char *fmt, ...)
 	va_list ap;
 	char *logtime;
 	int fd = get_log_fd (whichlog);
-
 
 		va_start(ap, fmt);
 		vsnprintf(buf, BUFSIZE, fmt, ap);
@@ -233,7 +229,6 @@ xa_debug (int level, char *fmt, ...)
 		fprintf (stderr, "WARNING, xa_debug() called with '%%s' formatted string [%s]!", buf);
 		return;
 	}
-
 
 	if (info.logfiledebuglevel >= level)
 		if (info.logfile != -1) {

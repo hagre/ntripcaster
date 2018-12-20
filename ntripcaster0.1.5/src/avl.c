@@ -45,7 +45,6 @@
 #include <config.h>
 #endif
 #endif
-
 #if PSPP
 #include "common.h"
 #include "arena.h"
@@ -92,22 +91,18 @@
 #endif
 
 /* avl_functions.c. ajd ************************************************/
-
 #ifndef __USE_BSD
 #define __USE_BSD
 #endif
 #ifndef __EXTENSIONS__
 #define __EXTENSIONS__
 #endif
-
 #include <string.h>
 #include <time.h>
-
 #ifndef _WIN32
 #include <sys/socket.h>
 #include <netinet/in.h>
 #endif
-
 #include "ntripcaster.h"
 #include "utility.h"
 #include "ntrip_string.h"
@@ -116,7 +111,6 @@
 #include "threads.h"
 #include "client.h"
 #include "sock.h"
-
 
 #ifdef HAVE_XMALLOC
 void *xmalloc (size_t);
@@ -274,14 +268,11 @@ new_node (void)
 	new_node ()
 #endif
 
-
 void *
 avl_traverse (avl_tree *tree, avl_traverser *trav)
 {
 	assert (tree && trav);
-
 	internal_lock_mutex(&tree->mutex);
-
 
   if (trav->init == 0)
     {
@@ -505,7 +496,6 @@ avl_find (avl_tree *tree, const void *item)
   return NULL;
 }
 
-
 void *
 avl_delete (avl_tree *tree, const void *item)
 {
@@ -522,6 +512,10 @@ avl_delete (avl_tree *tree, const void *item)
   a[0] = 0;
   pa[0] = &tree->root;
   p = tree->root.link[0];
+  if (p == NULL) {
+    internal_unlock_mutex(&tree->mutex);
+    return NULL;
+  }
   for (;;)
     {
       int diff = tree->cmp (item, p->data, tree->param);
@@ -974,7 +968,6 @@ compare_users (const void *first, const void *second, void *param)
 	return (ice_strcmp (v1->name, v2->name));
 }
 
-
 int
 compare_mounts (const void *first, const void *second, void *param)
 {
@@ -1118,7 +1111,6 @@ zero_trav(avl_traverser *trav)
 	trav->p = NULL;
 }
 
-
 int
 compare_sockets (const void *first, const void *second, void *param)
 {
@@ -1154,5 +1146,4 @@ avl_get_any_node (avl_tree *tree)
 
 	return (avl_traverse (tree, &trav));
 }
-
 

@@ -95,7 +95,6 @@
 #include <math.h>
 #endif
 
-
 extern server_info_t info;
 
 mutex_t library_mutex = {MUTEX_STATE_UNINIT};

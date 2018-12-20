@@ -87,7 +87,6 @@
 #include "client.h"
 #include "source.h"
 
-
 /* pool.c. ajd *************************************/
 # ifndef __USE_BSD
 #  define __USE_BSD
@@ -114,7 +113,6 @@
 # endif
 #endif
 #include "main.h"
-
 
 extern server_info_t info;
 const char cnull[] = "(null)";
@@ -163,9 +161,10 @@ void *handle_connection(void *arg)
 
 	if (ice_strncmp(line, "GET", 3) == 0) {
 		client_login(con, line);
-	} else if (ice_strncmp(line, "SOURCE", 6) == 0) {
+	} else if (ice_strncmp(line, "SOURCE", 6) == 0 || ice_strncmp(line, "POST", 4) == 0) { // Kun
 		source_login (con, line);
-	} else {
+	} else { 
+	        xa_debug(1, "KUN DEBUG: %s\n", line);
 		write_400 (con);
 		kick_not_connected(con, "Invalid header");
 	}
@@ -191,7 +190,7 @@ connection_t *
 get_connection (sock_t *sock)
 {
 	int sockfd;
-	socklen_t sin_len;
+	mysocklen_t sin_len;
 	connection_t *con;
 	fd_set rfds;
 	struct timeval tv;
@@ -259,7 +258,6 @@ get_connection (sock_t *sock)
 			return NULL;
 		}
 #endif
-
 		return con;
 	}
 
@@ -405,7 +403,6 @@ pool_cleaner ()
 {
 
 }
-
 
 /* ice_resolv.c. ajd *********************************************************************/
 
@@ -608,5 +605,4 @@ forward (const char *name, char *target)
 	
 	return target;
 }
-
 

@@ -92,7 +92,6 @@
 #include <dirent.h>
 #endif
 
-
 extern server_info_t info;
 extern int running;
 extern mutex_t authentication_mutex, library_mutex, sock_mutex;
@@ -102,7 +101,7 @@ const char const_null[] = "(null)";
 char *
 splitc (char *first, char *rest, const char divider)
 {
-	char *p;
+	char *p = NULL;
 
 	if (!rest)
 	{
@@ -119,9 +118,14 @@ splitc (char *first, char *rest, const char divider)
 	}
 
 	*p = 0;
-	if (first != NULL) strcpy(first, rest);
-	if (first != rest) strcpy(rest, p + 1);
 
+	if (first != NULL) {
+        strcpy(first, rest);
+    }
+
+    if (first != rest) {
+        strcpy(rest, p+1);
+    }
 	return rest;
 }
 
@@ -414,7 +418,6 @@ nice_time (unsigned long int seconds, char *buf)
 
 	return buf;
 }
-
 
 size_t
 ice_strlen (const char *string)

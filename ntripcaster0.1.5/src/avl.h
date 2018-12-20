@@ -57,12 +57,10 @@
 #define __USE_GNU
 #endif
 
-
 #include "threads.h"
 
 extern void internal_lock_mutex(mutex_t *mutex);
 extern void internal_unlock_mutex(mutex_t *mutex);
-
 
 /* Structure for a node in an AVL tree. */
 typedef struct avl_node

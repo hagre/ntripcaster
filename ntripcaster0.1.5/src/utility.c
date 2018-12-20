@@ -73,6 +73,7 @@
 # include <sys/stat.h>
 # include <time.h>
 # include <errno.h>
+# include <math.h>
 #else
 # include <winsock.h>
 # include <io.h>
@@ -93,7 +94,6 @@
 #include "timer.h"
 #include "string.h"
 #include "connection.h"
-
 
 extern server_info_t info;
 extern int running;
@@ -273,6 +273,9 @@ close_connection(void *data, void *param)
 	free_con (con);
 
 	if (con->type == client_e) {
+
+		thread_mutex_lock(&con->food.client->mutex);
+
 		source_t *con2 = source_with_client(con);
 
 		if (!con2)
@@ -295,6 +298,10 @@ close_connection(void *data, void *param)
 		  } else {
 			  xa_debug (2, "DEBUG: client %d without source?", con->id);
 		  }
+
+		thread_mutex_unlock(&con->food.client->mutex);
+		thread_mutex_destroy (&con->food.client->mutex);
+
 		nfree (con->food.client);
 		nfree (con);
 		return;
@@ -722,9 +729,10 @@ mount_exists (char *mount)
 
 	thread_mutex_lock (&info.source_mutex);
 
-	while ((scon = avl_traverse (info.sources, &trav)))
+	while ((scon = avl_traverse (info.sources, &trav)) != NULL)
 	{
-		if ((ice_strcmp (mount, scon->food.source->audiocast.mount) == 0) && (scon->food.source->connected != SOURCE_PENDING))
+		if ((ice_strcmp (mount, scon->food.source->audiocast.mount) == 0) && 
+                (scon->food.source->connected != SOURCE_PENDING))
 		{
 			thread_mutex_unlock (&info.source_mutex);
 			return 1;
@@ -747,13 +755,7 @@ generate_http_request (char *line, request_t *req)
 		return;
 	}
 
-//	if (ice_strncmp (line, "http://", 7) == 0)
-//	{
-		snprintf (full, BUFSIZE, "GET %s HTTP/1.0", line);
-
-//	} else {
-//		snprintf (full, BUFSIZE, "GET http://%s HTTP/1.0", line);
-//	}
+    snprintf (full, BUFSIZE, "GET %s HTTP/1.0", line);
 
 	build_request (full, req);
 
@@ -1151,8 +1153,11 @@ set_element configfile_settings[] =
 	{ "max_clients_per_source", integer_e, "Max number of clients listening on one source", NULL},
 	{ "location", string_e, "NtripCaster server geographical location", NULL},
 	{ "rp_email", string_e, "Resposible person email", NULL},
-  { "server_url", string_e, "URL for this NtripCaster server", NULL},
+    { "server_url", string_e, "URL for this NtripCaster server", NULL},
 	{ "logdir", string_e, "Directory for log files", NULL},
+    { "mountposfile", string_e, "file for mount position file", NULL},
+    { "auto_mount", string_e, "auto-change station", NULL},
+    { "read_gpgga_interval", integer_e, "interval for reading client gpgga message", NULL},
 	{ (char *) NULL, 0, (char *) NULL, NULL }
 };
 
@@ -1171,6 +1176,9 @@ setup_config_file_settings()
 	configfile_settings[x++].setting = &info.rp_email;
 	configfile_settings[x++].setting = &info.server_url;
 	configfile_settings[x++].setting = &info.logdir;
+    configfile_settings[x++].setting = &info.mountposfile;
+    configfile_settings[x++].setting = &info.auto_mount;
+    configfile_settings[x++].setting = &info.read_gpgga_interval;
 }
 
 set_element *
@@ -1271,6 +1279,131 @@ parse_config_file(char *file)
 	fd_close(cf);
 	return 0;
 }
+//paser gpgga message
+int parse_gpgga_msg(char *gpgga_t, pos_t *position) {
+    char item[BUFSIZE];
+    char gpgga[BUFSIZE];
+    int dd = 0;
+    double mm = 0.0;
+    double ddmm = 0.0;
+    snprintf(gpgga, BUFSIZE, "%s", gpgga_t);
+    int i = 0;
+    if (splitc(NULL, gpgga, '$') == NULL ){
+          return -1;
+    }
+
+    if (ice_strncmp(gpgga, "GPGGA", 5) != 0) {
+        write_log(LOG_DEFAULT, "ERROR: Not GPGGA message: %s\n", gpgga);
+        return -1;
+    }
+    for (i = 0; i<10; ++i) {
+        if (splitc(item, gpgga, ',') == NULL) {
+            write_log(LOG_DEFAULT, "ERROR: Wrong GPGGA message format: %s\n", gpgga);
+            return -1;
+        }
+        switch (i) {
+            case 2:
+                //latitude
+                ddmm = atof(item);
+                dd = (int)ddmm / 100;
+                mm = ddmm - dd*100;
+                position->lat = (dd + mm / 60.0) * M_PI / 180.0; //change to radian
+                break;
+            case 4:
+                //longitude
+                ddmm = atof(item);
+                dd = (int)ddmm / 100;
+                mm = ddmm - dd*100;
+                position->lng = (dd + mm / 60.0) * M_PI / 180.0; //change to radian
+                break;
+            case 9:
+                //height
+                position->height = atof(item);
+                break;
+            default:
+                break;
+        }
+    }
+    return 0;
+}
+
+//compute distance
+double compute_distance_xyz(double pos1[3], double pos2[3]) {
+    return sqrt((pos1[0] - pos2[0]) * (pos1[0] - pos2[0]) +
+                (pos1[1] - pos2[1]) * (pos1[1] - pos2[1]) + 
+                (pos1[2] - pos2[2]) * (pos1[2] - pos2[2]));
+}
+
+// lateral-longitude-height to x-y-z
+void llh2xyz(const double latitude, const double longitude, 
+             const double height, double (*r_xyz)[3]) {
+    double a = 6378137;
+    double f = 0.00335281066474;
+    double b = a - a * f;
+    double easquare = (a + b) * (a -b) / (a * a);
+    double n = a / sqrt(1 - easquare * sin(latitude) * sin(latitude));
+    (*r_xyz)[0] = (n + height) * cos(latitude) * cos(longitude);
+    (*r_xyz)[1] = (n + height) * cos(latitude) * sin(longitude);
+    (*r_xyz)[2] = (n * (1 - easquare) + height) * sin(latitude);
+}
+
+void get_mount_location_from_file(char* file, char* mount, pos_t *pos) {
+    int mf;
+    char line[BUFSIZE];
+    int lineno = 0;
+    xa_debug (1, "DEBUG: Parsing mount location file %s", file ? file : "(null)");
+    if (!file) {
+        return;
+    }
+    if ((mf = open_for_reading(file)) == -1) {
+        write_log(LOG_DEFAULT, "No mount location file found.");
+        return;
+    }
+    while (fd_read_line(mf, line, BUFSIZE) > 0) {
+        lineno++;
+        if ((ice_strlen(line) < 2) || (line[0] == '#') || line[0] == ' ')
+            continue;
+        if (line[ice_strlen(line) - 1] == '\n') {
+            line[ice_strlen(line) - 1] = '\0';
+        }
+        if (ice_strncmp(line, mount, ice_strlen(mount)) == 0) {
+            get_mount_location(line, pos);
+            close(mf);
+            return;
+        }
+    }
+    close(mf);
+}
+
+void get_mount_location(char* line, pos_t *mp) {
+     char item[BUFSIZE];
+     if (splitc(item, line, ':') == NULL) {
+        write_log(LOG_DEFAULT, "Wrong mount position format");
+        return;
+     }
+
+     int i = 0;
+     for (i = 0; i<3; ++i) {
+        splitc(item, line, ',');
+        switch (i) {
+            case 0:
+                //latitude
+                mp->lat = atof(item) * M_PI / 180.0; //change to radian
+                break;
+            case 1:
+                //longitude
+                mp->lng = atof(item) * M_PI / 180.0; //change to radian
+                break;
+            case 2:
+                //height
+                mp->height = atof(line);
+                break;
+            default:
+                break;
+        }
+    }
+   
+}
 
 void
 write_401 (connection_t *con, char *realm)
@@ -1297,3 +1430,4 @@ write_http_header(sock_t sockfd, int error, const char *msg)
 	sock_write_line (sockfd, "HTTP/1.0 %i %s", error, msg);
 	sock_write_line (sockfd, "Server: NTRIP NtripCaster %s/%s", info.version, info.ntrip_version);
 }
+

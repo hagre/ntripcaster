@@ -98,7 +98,6 @@ int deny_severity = LOG_WARNING;
 #include "utility.h"
 #include "ntrip_string.h"
 
-
 #ifdef _WIN32
 #define read _read
 extern int running;
@@ -324,7 +323,6 @@ sock_add (SOCKET s, int domain, int type, int protocol)
 	return sock_insert (is);
 }
 
-
 int
 sock_del (SOCKET s)
 {
@@ -336,8 +334,6 @@ sock_del (SOCKET s)
 		xa_debug (1, "WARNING: Tried to remove invalid socket %d", s);
 		return -1;
 	}
-
-
 
 	is = sock_find (s);
 
@@ -383,7 +379,7 @@ SOCKET sock_socket(int domain, int type, int protocol)
 	return s;
 }
 
-SOCKET sock_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
+SOCKET sock_accept(SOCKET s, struct sockaddr * addr, mysocklen_t * addrlen)
 {
 	SOCKET rs = accept(s, addr, addrlen);
 
@@ -699,7 +695,10 @@ int sock_read_lines(SOCKET sockfd, char *buff, const int len)
 		xa_debug(1, "DEBUG: Socket error on socket %d %d", sockfd,
 			 errno);
 		return 0;
-	}
+	} // Kun 
+        else {
+             xa_debug(1, "KUN DEBUG: read_bytes = %d (%c)\n", read_bytes, c[0]);
+        }
 
 	while ((read_bytes == 1) && (pos < (len - 1))) {
 		if (c[0] != '\r')
@@ -717,15 +716,15 @@ int sock_read_lines(SOCKET sockfd, char *buff, const int len)
 			xa_debug(1, "DEBUG: Socket error on socket %d %d",
 				 sockfd, errno);
 			return 0;
-		}
+		} 
 	}
 
 	if (read_bytes == 1) {
 		buff[pos] = '\0';
 		return 1;
 	} else {
-		return 0;
-	}
+        return 0;
+    }
 }
 
 /*
@@ -771,7 +770,6 @@ SOCKET sock_get_server_socket(const int port)
 				  "ERROR: setsockopt() failed to set SO_REUSEADDR flag. (mostly harmless)");
 	}
 #endif
-
 	/*
 	 * setup sockaddr structure 
 	 */
@@ -831,7 +829,6 @@ SOCKET sock_get_server_socket(const int port)
 
 	return sockfd;
 }
-
 
 /*
  * Connect to hostname on specified port and return the created socket.
@@ -918,7 +915,6 @@ SOCKET sock_connect_wto(const char *hostname, const int port,
 
 	{
 		char buf[50];
-
 		makeasciihost(&server.sin_addr, buf);
 		xa_debug(1, "Trying to connect to %s:%d", buf, port);
 	}
@@ -928,7 +924,7 @@ SOCKET sock_connect_wto(const char *hostname, const int port,
 		struct timeval tv;
 		int retval;
 		int val;
-		socklen_t valsize = sizeof (int);
+		mysocklen_t valsize = sizeof (int);
 
 		xa_debug(3,
 			 "DEBUG: sock_connect(): doing a connection w/ timeout");
@@ -959,7 +955,7 @@ SOCKET sock_connect_wto(const char *hostname, const int port,
 		if (select(sockfd + 1, NULL, &wfds, NULL, &tv)) {
 			retval = getsockopt(sockfd, SOL_SOCKET, SO_ERROR,
 					    (void *) &val,
-					    (socklen_t *) & valsize);
+					    (mysocklen_t *) & valsize);
 			if ((retval == 0) && (val == 0)) {
 				sock_set_blocking(sockfd, SOCK_BLOCK);
 				return sockfd;
@@ -1043,7 +1039,7 @@ char *sock_get_local_ipaddress()
 {
 #ifndef _WIN32
 	SOCKET sockfd;
-	socklen_t sinlen = sizeof (struct sockaddr_in);
+	mysocklen_t sinlen = sizeof (struct sockaddr_in);
 	struct sockaddr_in sin, cliaddr;
 
 	sockfd = sock_socket(AF_INET, SOCK_DGRAM, 0);

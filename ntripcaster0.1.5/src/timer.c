@@ -103,8 +103,6 @@ void status_write(server_info_t *infostruct)
 {
 	char *lt = get_log_time();
 
-//	if (running == SERVER_RUNNING) info.num_clients = (unsigned long int) count_clients();
-
 	write_log(LOG_DEFAULT, "Bandwidth:%fKB/s Sources:%ld Clients:%ld", info.bandwidth_usage, info.num_sources, info.num_clients);
 
 	if (lt)
@@ -148,9 +146,7 @@ timer_handle_status_lines (time_t stime)
 		info.statuslasttime = stime;
 		status_write(&info);
 	}
-	
 }
-
 
 void
 timer_handle_transfer_statistics (time_t stime, time_t *trottime, time_t *justone, statistics_t *trotstat)
@@ -204,7 +200,6 @@ timer_handle_transfer_statistics (time_t stime, time_t *trottime, time_t *juston
 
 					}
 				}
-				
 				get_running_stats(trotstat);
 				*trottime = get_time();
 			}
@@ -356,7 +351,6 @@ void get_running_stats_proc (statistics_t *stat, int lock)
 	get_daily_stats(&bufstat);
 	add_stats(stat, &bufstat, 1000);
 }
-
 
 void zero_stats(statistics_t *stat)
 {

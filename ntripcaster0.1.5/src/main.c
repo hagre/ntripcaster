@@ -105,7 +105,6 @@
 int running = 0;
 #endif
 
-
 /* for perror and for various sanity checks */
 extern int errno;
 
@@ -116,7 +115,6 @@ extern mutex_t sock_mutex;
 /* global */
 server_info_t info;
 struct in_addr localaddr;
-
 
 int 
 main (int argc, char **argv)
@@ -146,12 +144,10 @@ main (int argc, char **argv)
 
 	parse_default_config_file ();
 
-	//print_authentication_scheme(); // ajd
-
 	/* Initialize platform dependant network */
 	initialize_network ();
 
-	/* Print header, select console mode, start the main loop */
+ 	/* Print header, select console mode, start the main loop */
 	startup_mode ();
 
 	return 0;
@@ -445,8 +441,15 @@ clean_shutdown (server_info_t *info)
 		avl_traverser trav = {0};
 		
 		while ((mi = avl_traverse(info->mem, &trav))) {
-			if (mi->thread_id != 0 && mi->thread_id != -1)
-				write_log(LOG_DEFAULT, "WARNING: %d bytes allocated by thread %d at line %d in %s not freed before thread exit", mi->size, mi->thread_id, mi->line, mi->file);
+            if (mi->thread_id != 0 && mi->thread_id != -1) {
+                write_log(LOG_DEFAULT, 
+                        "WARNING: %d bytes allocated \
+                        by thread %d at line %d in %s not freed before thread exit", 
+                        mi->size, 
+                        mi->thread_id, 
+                        mi->line, 
+                        mi->file);
+            }
 		}
 	}
 #endif
@@ -606,6 +609,4 @@ setup_listeners()
 		thread_mutex_unlock(&info.hostname_mutex);
 	}
 }
-
-
 

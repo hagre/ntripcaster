@@ -41,7 +41,6 @@
 #ifndef __ICECAST_CLIENT_H
 #define __ICECAST_CLIENT_H
 
-
 void client_login(connection_t *con, char *line);
 void put_client(connection_t *con);
 client_t *create_client();
@@ -52,8 +51,9 @@ int client_errors (const client_t *client);
 void greet_client(connection_t *con, source_t *source);
 const char *client_type (const connection_t *clicon);
 void send_sourcetable (connection_t *con);
-#endif
+void *client_auto_select_source(void *conarg);
 
+#endif
 
 /* basic.h. ajd ********************************************************************/
 

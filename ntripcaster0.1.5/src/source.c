@@ -66,6 +66,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <float.h>
 
 #ifndef _WIN32
 #include <sys/socket.h> 
@@ -102,12 +103,13 @@ extern server_info_t info;
 void source_login(connection_t *con, char *expr)
 {
 	char line[BUFSIZE], command[BUFSIZE], arg[BUFSIZE];
-	char pass[BUFSIZE] ="";
-	int go_on = 2;
+	char pass[BUFSIZE] ="", *pass2 = NULL;
+	int go_on = 7; //Kun: 2
 	int connected = 1;
 	int password_accepted = 0;
 	source_t *source;
 	char *res;
+    int v = 1; // V1 or V2;
 
 	if (con->type == unknown_connection_e)
 	{
@@ -135,7 +137,7 @@ void source_login(connection_t *con, char *expr)
 		}
 		
 		/* The delimiter on the first line is ' ', on the following lines ':' */
-		if (go_on == 2)
+		if (go_on == 7) 
 			res = splitc (command, line, ' ');
 		else
 			res = splitc (command, line, ':');
@@ -149,9 +151,13 @@ void source_login(connection_t *con, char *expr)
 		}
 		
 		if (line[0])
-			xa_debug (2, "DEBUG: Source line: [%s] [%s]", command, arg);
+			xa_debug (2, "DEBUG: Source line [%d]: [%s] [%s]", go_on--, command, arg);
 
-		if (ice_strncmp(command, "SOURCE", 6) == 0)
+        if (ice_strncmp(command, "SOURCE", 6) == 0) v=1;
+        // support for ntrip_v2.0
+        if (ice_strncmp(command, "POST", 4) == 0) v=2;
+
+		if (ice_strncmp(command, "SOURCE", 6) == 0 || ice_strncmp(command, "POST", 4) == 0) // Kun
 		{
 			if (splitc(pass, arg, ' ') == NULL) {
 				sock_write_line (con->sock, "ERROR - Missing Mountpoint\r\n");
@@ -159,18 +165,24 @@ void source_login(connection_t *con, char *expr)
 				connected = 0;
 				return;
 			}
-			
-			if (!password_match(info.encoder_pass, pass)) {
-				sock_write_line (con->sock, "ERROR - Bad Password\r\n");
-				kick_connection (con, "Bad Password");
-				return;
-			} else
-				password_accepted = 1;
+		    if (v == 1) { //V1 anthentication
+			    if (!password_match(info.encoder_pass, pass)) {
+				    xa_debug (2, "KUN DEBUG: info.encoder_pass %s, pass %s\n", info.encoder_pass, pass);
 
-		
+				    sock_write_line (con->sock, "ERROR - Bad Password\r\n");
+				    kick_connection (con, "Bad Password");
+				    return;
+			    } else
+				    password_accepted = 1;
+            }
+
 			if (!source->audiocast.mount)
-				source->audiocast.mount = my_strdup(arg);
-
+                //V1 source, pass, mount
+                if (ice_strncmp(command, "SOURCE", 6) == 0)
+				    source->audiocast.mount = my_strdup(arg);
+                //V2 post, mount 
+                if (ice_strncmp(command, "POST", 4) == 0)
+                    source->audiocast.mount = my_strdup(pass);
 			{
 				char slash[BUFSIZE];
 				if (source->audiocast.mount[0] != '/')
@@ -186,16 +198,39 @@ void source_login(connection_t *con, char *expr)
 				kick_connection (con, "Invalid Mount Point");
 				return;
 			}
-			if (source->type == encoder_e) go_on = 1;
-		}
 
-		else if (strncasecmp(command, "Source-Agent", 12) == 0)
+            /***for auto select mount point***/
+            get_mount_location_from_file(info.mountposfile, source->audiocast.mount, &source->pos);
+		}
+		else if (strncasecmp(command, "Source-Agent", 12) == 0 || strncasecmp(command, "User-Agent", 10) == 0)
 		{
 			source->source_agent = my_strdup(arg);
 		}
+        //Authorization: Basic 
+        else if (strncasecmp(arg, " Basic ", 7) == 0) {
+            pass2 = util_base64_decode(arg+7);
+            const char *s2 = pass2;
+            pass2 = strchr(s2, ':')+1;
+            // support for ntrip v2.0
+            if (v == 2) { 
+                if (!password_match(info.encoder_pass, pass2)) {
+                    xa_debug (2, "KUN DEBUG: info.encoder_pass %s, pass2 %s\n", info.encoder_pass, pass2);
+                    sock_write_line (con->sock, "ERROR - Bad Password\r\n");
+                    kick_connection (con, "Bad Password");
+                    return;
+                } else
+                    password_accepted = 1;
+            }
+        }
 	} while ((go_on > 0) && connected);
+
+    if (password_accepted == 0) {
+         xa_debug (2, "KUN DEBUG: info.encoder_pass %s\n", info.encoder_pass);
+         sock_write_line (con->sock, "ERROR - Bad Password\r\n");
+         kick_connection (con, "Bad Password");
+    }
 	
-	if (!source->source_agent || strncasecmp(source->source_agent, "ntrip", 5) != 0) {
+	if (!source->source_agent) {
 		sock_write_line (con->sock, "Not authorized (no NTRIP source)\r\n");
 		kick_connection (con, "No NTRIP source");
 		return;
@@ -258,7 +293,7 @@ source_func(void *conarg)
 		source_get_new_clients (source);
 
 		add_chunk(con);
-		
+
 		for (i = 0; i < 10; i++) {
 			
 			if (source->connected != SOURCE_CONNECTED)
@@ -274,7 +309,7 @@ source_func(void *conarg)
 					break;
 				
 				source_write_to_client (source, clicon);
-				
+
 			}
 			
 			thread_mutex_unlock(&source->mutex);
@@ -366,7 +401,6 @@ find_mount_with_req (request_t *req)
 	char tempbuf[256] = "";
 
 	connection_t *con;
-//	request_t search;
 
 	int true = 0;
 
@@ -380,53 +414,27 @@ find_mount_with_req (request_t *req)
 
 	xa_debug (1, "DEBUG: Looking for [%s] on host [%s] on port %d", req->path, req->host, req->port);
 	
-
 	while ((con = avl_traverse(info.sources, &trav)) != NULL) 
 	{
 		true = 0;
 
 		xa_debug(2, "DEBUG: Looking on mount [%s]", con->food.source->audiocast.mount);
 
-/* old mount search. ajd
-		zero_request(&search);
-		generate_http_request(con->food.source->audiocast.mount, &search);
-		strncpy(tempbuf, con->food.source->audiocast.mount, 252);
-		if 	(search.path[0] &&
-			(ice_strcasecmp(search.host, req->host) == 0) &&
-			(search.port == req->port) &&
-			(	(ice_strcmp(search.path, req->path) == 0) ||
-				(ice_strcmp(tempbuf, req->path) == 0))
-			) {
-				true = 1;
-		} else if (con->food.source->audiocast.mount[0] == '/') {
-			if 	((hostname_local(req->host) &&
-				((ice_strcmp(con->food.source->audiocast.mount, req->path) == 0) ||
-					(ice_strcmp(tempbuf, req->path) == 0)))
-				)
-					true = 1;
-		} else {
-			if (	(hostname_local(req->host) &&
-				((ice_strcmp(con->food.source->audiocast.mount, req->path + 1) == 0) ||
-				(ice_strcmp(tempbuf, req->path + 1) == 0)))
-				)
-					true = 1;
-		}
-*/
+        if (con->food.source->audiocast.mount[0] == '/') {
+            if (	(ice_strcmp(con->food.source->audiocast.mount, req->path) == 0) ||
+                (ice_strcmp(tempbuf, req->path) == 0)
+            ) true = 1;
+        } else {
+            if (	(ice_strcmp(con->food.source->audiocast.mount, req->path + 1) == 0) ||
+                (ice_strcmp(tempbuf, req->path + 1) == 0)
+            ) true = 1;
+        }
 
-		if (con->food.source->audiocast.mount[0] == '/') {
-			if (	(ice_strcmp(con->food.source->audiocast.mount, req->path) == 0) ||
-				(ice_strcmp(tempbuf, req->path) == 0)
-			) true = 1;
-		} else {
-			if (	(ice_strcmp(con->food.source->audiocast.mount, req->path + 1) == 0) ||
-				(ice_strcmp(tempbuf, req->path + 1) == 0)
-			) true = 1;
-		}
+        if (true) {
+            xa_debug(1, "DEBUG: Found local mount for [%s]", req->path);
+            return con;
+        } 
 
-		if (true) {
-			xa_debug(1, "DEBUG: Found local mount for [%s]", req->path);
-			return con;
-		} 
 	}
 	return NULL;
 }
@@ -556,7 +564,6 @@ add_chunk (connection_t *con)
 	con->food.source->chunk[con->food.source->cid].len = read_bytes;
 	con->food.source->chunk[con->food.source->cid].clients_left = con->food.source->num_clients;
 	con->food.source->cid = (con->food.source->cid + 1) % CHUNKLEN;
-	
 }
 
 void

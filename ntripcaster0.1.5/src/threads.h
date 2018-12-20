@@ -68,7 +68,6 @@ typedef struct icemutex_St
 	long int id;
 } mutex_t;
 
-
 #define thread_create(n,x,y) thread_create_c (n,x,y,__LINE__,__FILE__);
 #define thread_create_mutex(x) thread_create_mutex_c (x,__LINE__,__FILE__);
 #define thread_mutex_lock(x) thread_mutex_lock_c (x,__LINE__,__FILE__);
@@ -130,7 +129,6 @@ void thread_rename(const char *name); /* renames current thread */
 
 #endif
 
-
 /* memory.h. ajd ****************************************************************************/
 #ifndef __ICECAST_MEMORY_H
 #define __ICECAST_MEMORY_H
@@ -167,6 +165,4 @@ void initialize_memory_checker ();
 #ifdef HAVE_MCHECK_H
 void icecast_mcheck_status (enum mcheck_status STATUS);
 #endif
-
 #endif
-

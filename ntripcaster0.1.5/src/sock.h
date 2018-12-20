@@ -77,7 +77,7 @@ int sock_valid (const SOCKET sockfd);
 int sock_set_blocking(SOCKET sockfd, const int block);
 int sock_close(SOCKET sockfd);
 SOCKET sock_socket (int domain, int type, int protocol);
-SOCKET sock_accept (SOCKET s, struct sockaddr *addr, socklen_t *addrlen);
+SOCKET sock_accept (SOCKET s, struct sockaddr *addr, mysocklen_t *addrlen);
 SOCKET sock_create_udp_socket ();
 char *sock_get_local_ipaddress ();
 void sock_close_all_sockets ();
@@ -94,6 +94,7 @@ int sock_write_line (SOCKET sockfd, const char *fmt, ...);
 int sock_write_string (SOCKET sokfd, const char *buff);
 
 /* Socket read functions */
+int sock_read(SOCKET sockfd, char *buff, const int len);
 int sock_read_lines(SOCKET sockfd, char *string, const int len);
 int sock_read_lines_np(SOCKET sockfd, char *string, const int len);
 
@@ -105,10 +106,4 @@ const char *sock_get_libwrap_type (const contype_t contype);
 ice_socket_t *sock_find (SOCKET s);
 #endif
 #endif
-
-
-
-
-
-
 
